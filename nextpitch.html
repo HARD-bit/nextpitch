@@ -309,31 +309,14 @@ footer { background: var(--navy2); border-top: 1px solid var(--border); padding:
 @media (max-width: 768px) {
   .nav-links li:nth-child(4), .nav-links li:nth-child(5) { display: none; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
-  .footer-grid > * { text-align: center; }
-  .footer-brand p { max-width: 100%; }
   .modal-hero { flex-direction: column; text-align: center; }
   .hero h1 { font-size: 2rem; }
   .compare-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; }
 }
-@media (max-width: 600px) {
-  /* Navbar: shrink everything so all items fit on one line */
-  nav { padding: 0 0.6rem; height: 56px; }
-  .logo { font-size: 1.1rem; gap: 6px; }
-  .logo-icon { width: 28px; height: 28px; font-size: 0.95rem; }
-  .nav-links { gap: 0; }
-  .nav-links a { padding: 0.3rem 0.45rem; font-size: 0.75rem; }
-  .nav-cta { padding: 0.35rem 0.65rem; font-size: 0.72rem; }
-}
 @media (max-width: 480px) {
-  /* Hide CTA on very small screens — keeps all nav text visible */
-  .nav-cta { display: none; }
+  nav { padding: 0 1rem; }
   .players-page { padding: 5rem 1rem 2rem; }
-  /* Footer: single column, all centered */
   .footer-grid { grid-template-columns: 1fr; }
-  .footer-grid > * { text-align: center; }
-  .footer-brand p { max-width: 100%; }
-  .footer-col ul { padding: 0; }
-  .footer-bottom { justify-content: center; text-align: center; }
   .modal-body { padding: 1rem 1rem 1.5rem; }
 }
 </style>
@@ -656,7 +639,7 @@ function updateCompareBar() {
     const p = compareList[i] ? players.find(x => x.id === compareList[i]) : null;
     if (p) {
       slot.classList.add('filled');
-      slot.innerHTML = `<span class="compare-slot-name">${p.emoji} ${p.name}</span><span class="compare-slot-remove" onclick="toggleCompare(${p.id},event)">✕</span>`;
+      slot.innerHTML = `<span>${p.emoji}</span><span class="compare-slot-name">${p.name}</span><span class="compare-slot-remove" onclick="toggleCompare(${p.id},event)">✕</span>`;
     } else {
       slot.classList.remove('filled');
       slot.innerHTML = `<span style="color:var(--muted);font-size:0.82rem">Seleziona giocatore…</span>`;
@@ -666,362 +649,402 @@ function updateCompareBar() {
 function clearCompare() {
   compareList = [];
   updateCompareBar();
-  filterPlayers();
-  renderFeatured();
+  if (document.getElementById('players-grid').innerHTML) filterPlayers();
+  if (document.getElementById('featured-grid').innerHTML) renderFeatured();
 }
 
-// ========== MODAL ==========
+// ========== RENDER PLAYER CARD ==========
+function renderPlayerCard(p) {
+  const watched = isWatched(p.id);
+  const inCompare = compareList.includes(p.id);
+  const views = scoutViews(p.id);
+  return `<div class="player-card${inCompare ? ' compare-selected' : ''}" onclick="openPlayerModal(${p.id})">
+    <div class="player-card-header">
+      <div class="player-avatar"><span style="font-size:1.8rem">${p.emoji}</span></div>
+      <div class="player-info">
+        <div class="player-name">${p.name}</div>
+        <div class="player-pos-age">${posLabel(p.pos)} · ${p.age} anni · ${p.foot}</div>
+        <div class="player-club-row"><span class="club-badge">${p.club}</span><span>${p.nation}</span></div>
+      </div>
+      <div class="pos-badge">${p.pos}</div>
+    </div>
+    <div class="player-card-body">
+      <div class="scout-views"><span class="scout-dot"></span>${views} scout questa settimana</div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="mini-stat-val">${p.goals}</div><div class="mini-stat-key">GOL</div></div>
+        <div class="mini-stat"><div class="mini-stat-val">${p.assist}</div><div class="mini-stat-key">ASSIST</div></div>
+        <div class="mini-stat"><div class="mini-stat-val">${p.match}</div><div class="mini-stat-key">PARTITE</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="value-tag">💰 ${p.value}</span>
+        <span class="available-badge ${p.available?'yes':'no'}">${p.available?'✅ Disponibile':'🔒 Contratto'}</span>
+      </div>
+      <div class="card-actions">
+        <button class="card-btn view" onclick="openPlayerModal(${p.id});event.stopPropagation()">Profilo →</button>
+        <button class="card-btn watch${watched?' active':''}" onclick="toggleWatchlist(${p.id},event)" title="${watched?'Rimuovi dalla lista':'Salva nella lista'}">${watched?'📌':'🔖'}</button>
+        <button class="card-btn compare${inCompare?' active':''}" onclick="toggleCompare(${p.id},event)" title="Confronta">⚖️</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ========== RENDER FEATURED ==========
+function renderFeatured() {
+  const grid = document.getElementById('featured-grid');
+  if (!grid) return;
+  grid.innerHTML = players.filter(p => p.featured).slice(0,4).map(renderPlayerCard).join('');
+}
+
+// ========== RENDER PLAYERS ==========
+let currentFiltered = [...players];
+function renderPlayers(list) {
+  currentFiltered = list;
+  const grid = document.getElementById('players-grid');
+  const count = document.getElementById('results-count');
+  if (!grid) return;
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔍</div><p>Nessun giocatore trovato. Prova a modificare i filtri.</p></div>`;
+    count.innerHTML = '';
+    return;
+  }
+  grid.innerHTML = list.map(renderPlayerCard).join('');
+  count.innerHTML = `<span>${list.length}</span> giocatori trovati`;
+}
+function filterPlayers() {
+  const q = document.getElementById('player-search').value.toLowerCase();
+  const pos = document.getElementById('pos-filter').value;
+  const ageRange = document.getElementById('age-filter').value;
+  const avail = document.getElementById('avail-filter').value;
+  let filtered = players.filter(p => {
+    const mQ = !q || p.name.toLowerCase().includes(q) || p.club.toLowerCase().includes(q) || p.nazione.toLowerCase().includes(q);
+    const mPos = !pos || p.pos === pos;
+    const mAvail = !avail || (avail==='yes'&&p.available) || (avail==='no'&&!p.available);
+    let mAge = true;
+    if (ageRange==='16-18') mAge = p.age>=16&&p.age<=18;
+    else if (ageRange==='19-21') mAge = p.age>=19&&p.age<=21;
+    else if (ageRange==='22-23') mAge = p.age>=22&&p.age<=23;
+    return mQ && mPos && mAvail && mAge;
+  });
+  renderPlayers(filtered);
+}
+function resetFilters() {
+  document.getElementById('player-search').value = '';
+  document.getElementById('pos-filter').value = '';
+  document.getElementById('age-filter').value = '';
+  document.getElementById('avail-filter').value = '';
+  renderPlayers(players);
+}
+
+// ========== WATCHLIST PAGE ==========
+function renderWatchlistPage() {
+  const grid = document.getElementById('watchlist-grid');
+  if (!grid) return;
+  const ids = getWatchlist();
+  const list = players.filter(p => ids.includes(p.id));
+  if (!list.length) {
+    grid.innerHTML = `<div class="watchlist-empty" style="grid-column:1/-1">
+      <div class="empty-icon">📌</div>
+      <p>Non hai ancora salvato nessun giocatore.</p>
+      <button class="btn-primary" onclick="showSection('players',document.querySelector('.nav-links a:nth-child(2)'))">Esplora Giocatori</button>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = list.map(renderPlayerCard).join('');
+}
+
+// ========== LEADERBOARD ==========
+let lbSort = 'goals'; let lbDir = -1;
+function sortLeaderboard(key, tabEl, thKey) {
+  lbSort = key; lbDir = -1;
+  // Update tabs
+  if (tabEl) {
+    document.querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
+    tabEl.classList.add('active');
+  }
+  // Update header arrows
+  ['goals','assist','match','valueNum','scoutViews'].forEach(k => {
+    const th = document.getElementById(`th-${k==='valueNum'?'value':k==='scoutViews'?'views':k}`);
+    if (th) th.querySelector('.sort-arrow').textContent = k===key ? '▼' : '↕';
+    if (th) th.classList.toggle('sorted', k===key);
+  });
+  renderLeaderboard();
+}
+function renderLeaderboard() {
+  const body = document.getElementById('lb-body');
+  if (!body) return;
+  const sorted = [...players].map(p => ({...p, scoutViews: scoutViews(p.id)}))
+    .sort((a,b) => lbDir * ((b[lbSort]||0) - (a[lbSort]||0)));
+  const rankClass = i => i===0?'gold':i===1?'silver':i===2?'bronze':'';
+  const rankIcon = i => i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1;
+  body.innerHTML = sorted.map((p,i) => `
+    <tr onclick="openPlayerModal(${p.id})">
+      <td><span class="lb-rank ${rankClass(i)}">${rankIcon(i)}</span></td>
+      <td><div class="lb-player">
+        <span class="lb-avatar">${p.emoji}</span>
+        <div><div class="lb-name">${p.name}</div><div class="lb-club">${p.club} · <span class="lb-pos">${p.pos}</span></div></div>
+      </div></td>
+      <td class="lb-num" style="color:var(--green)">${p.goals}</td>
+      <td class="lb-num" style="color:var(--blue)">${p.assist}</td>
+      <td class="lb-num">${p.match}</td>
+      <td class="lb-val">${p.value}</td>
+      <td class="lb-num" style="color:var(--orange)">${p.scoutViews}</td>
+      <td><span class="available-badge ${p.available?'yes':'no'}">${p.available?'✅ Disp.':'🔒'}</span></td>
+    </tr>`).join('');
+}
+
+// ========== RECRUITERS ==========
+function renderRecruiters(list) {
+  const grid = document.getElementById('recruiters-grid');
+  const count = document.getElementById('rec-results-count');
+  if (!grid) return;
+  if (!list.length) { grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔍</div><p>Nessun recruiter trovato.</p></div>`; count.innerHTML=''; return; }
+  grid.innerHTML = list.map(r => `
+    <div class="recruiter-card">
+      <div class="recruiter-header">
+        <div class="recruiter-avatar">${r.emoji}</div>
+        <div>
+          <div class="recruiter-name">${r.name}</div>
+          <div class="recruiter-role">${r.role}</div>
+          <div class="recruiter-club">🏟️ ${r.club} · ${r.league}</div>
+        </div>
+        ${r.verified?'<span class="verified-badge">✓ Verificato</span>':''}
+      </div>
+      <div class="recruiter-tags">${r.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      <p style="font-size:0.82rem;color:var(--muted);line-height:1.5">${r.bio}</p>
+      <div class="recruiter-stats">
+        <div class="rec-stat"><div class="rec-stat-val">${r.playersFound}</div><div class="rec-stat-key">Profili Visti</div></div>
+        <div class="rec-stat"><div class="rec-stat-val">${r.transfers}</div><div class="rec-stat-key">Trasferimenti</div></div>
+        <div class="rec-stat"><div class="rec-stat-val">${r.active}</div><div class="rec-stat-key">Attivo</div></div>
+      </div>
+      <button class="contact-btn" onclick="showToast('📧 Richiesta inviata a ${r.name}!')">✉️ Contatta ${r.name.split(' ')[0]}</button>
+    </div>`).join('');
+  count.innerHTML = `<span>${list.length}</span> recruiter trovati`;
+}
+function filterRecruiters() {
+  const q = document.getElementById('rec-search').value.toLowerCase();
+  const league = document.getElementById('league-filter').value;
+  renderRecruiters(recruiters.filter(r => {
+    const mQ = !q || r.name.toLowerCase().includes(q) || r.club.toLowerCase().includes(q) || r.league.toLowerCase().includes(q);
+    return mQ && (!league || r.league === league);
+  }));
+}
+
+// ========== PLAYER MODAL ==========
 let radarChart = null;
-function openModal(id) {
+function openPlayerModal(id) {
   const p = players.find(x => x.id === id);
   if (!p) return;
-  const views = scoutViews(p.id);
+  if (radarChart) { radarChart.destroy(); radarChart = null; }
+
   document.getElementById('modal-content').innerHTML = `
     <button class="modal-close" onclick="closeModal()">✕</button>
     <div class="modal-hero">
       <div class="modal-avatar">${p.emoji}</div>
       <div>
-        <div class="modal-player-name">${p.name} ${p.nation}</div>
-        <div class="modal-meta">${posLabel(p.pos)} · ${p.age} anni · ${p.foot} · ${p.height} · ${p.weight}</div>
+        <div class="modal-player-name">${p.name}</div>
+        <div class="modal-meta">${posLabel(p.pos)} · ${p.age} anni · ${p.nazione} ${p.nation}</div>
         <div class="modal-badges">
-          <span class="pos-badge">${p.pos}</span>
-          <span class="available-badge ${p.available ? 'yes' : 'no'}">${p.available ? '✅ Disponibile' : '🔴 Sotto contratto'}</span>
+          <span class="pos-badge" style="position:static">${p.pos}</span>
+          <span class="available-badge ${p.available?'yes':'no'}">${p.available?'✅ Disponibile':'🔒 Sotto contratto'}</span>
           <span class="value-tag">💰 ${p.value}</span>
-          <span style="font-size:0.75rem;color:var(--orange);font-weight:600">👁 ${views} scout questa settimana</span>
+          <span style="font-size:0.75rem;color:var(--orange);font-weight:600">👁 ${scoutViews(p.id)} scout questa settimana</span>
         </div>
+        <div style="margin-top:10px;font-size:0.83rem;color:var(--muted);line-height:1.5">${p.desc}</div>
       </div>
     </div>
     <div class="modal-body">
       <div class="modal-section">
-        <div class="modal-section-title">Statistiche stagione 2024/25</div>
+        <div class="modal-section-title">Statistiche Stagione 24/25</div>
         <div class="stats-grid">
-          <div class="stat-box"><div class="stat-box-val">${p.goals}</div><div class="stat-box-key">Gol</div></div>
-          <div class="stat-box"><div class="stat-box-val">${p.assist}</div><div class="stat-box-key">Assist</div></div>
-          <div class="stat-box"><div class="stat-box-val">${p.match}</div><div class="stat-box-key">Partite</div></div>
-        </div>
-      </div>
-      <div class="modal-two-col">
-        <div class="modal-section">
-          <div class="modal-section-title">Attributi</div>
-          <div class="radar-wrap"><canvas id="modal-radar"></canvas></div>
-        </div>
-        <div class="modal-section">
-          <div class="modal-section-title">Posizione tattica</div>
-          <div class="pitch-wrap">${pitchSVG(p.pos)}</div>
+          <div class="stat-box"><div class="stat-box-val">${p.goals}</div><div class="stat-box-key">⚽ Gol</div></div>
+          <div class="stat-box"><div class="stat-box-val">${p.assist}</div><div class="stat-box-key">🎯 Assist</div></div>
+          <div class="stat-box"><div class="stat-box-val">${p.match}</div><div class="stat-box-key">📋 Partite</div></div>
+          <div class="stat-box"><div class="stat-box-val">${p.height}</div><div class="stat-box-key">📏 Altezza</div></div>
+          <div class="stat-box"><div class="stat-box-val">${p.weight}</div><div class="stat-box-key">⚖️ Peso</div></div>
+          <div class="stat-box"><div class="stat-box-val">${p.foot}</div><div class="stat-box-key">👟 Piede</div></div>
         </div>
       </div>
       <div class="modal-section">
-        <div class="modal-section-title">Informazioni</div>
-        <div class="info-grid">
-          <div class="info-item"><div class="info-key">Club attuale</div><div class="info-val">${p.club}</div></div>
-          <div class="info-item"><div class="info-key">Nazionalità</div><div class="info-val">${p.nation} ${p.nazione}</div></div>
-          <div class="info-item"><div class="info-key">Piede</div><div class="info-val">${p.foot}</div></div>
-          <div class="info-item"><div class="info-key">Valore di mercato</div><div class="info-val" style="color:var(--gold)">${p.value}</div></div>
-        </div>
-        <p style="font-size:0.88rem;color:var(--muted);margin-top:1rem;line-height:1.7">${p.desc}</p>
-      </div>
-      <div class="modal-section">
-        <div class="modal-section-title">Agente / Procuratore</div>
-        <div class="agent-box">
-          <div class="agent-icon">🤝</div>
+        <div class="modal-section-title">Profilo Tecnico</div>
+        <div class="modal-two-col">
           <div>
-            <div class="agent-name">${p.agent}</div>
-            <div class="agent-contact">${p.agentEmail}</div>
+            <div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:0.6rem">Radar Attributi</div>
+            <div class="radar-wrap"><canvas id="radar-chart"></canvas></div>
+          </div>
+          <div>
+            <div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:0.6rem">Posizione Tattica</div>
+            ${pitchSVG(p.pos)}
           </div>
         </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Info Club & Mercato</div>
+        <div class="info-grid">
+          <div class="info-item"><div class="info-key">Club Attuale</div><div class="info-val">🏟️ ${p.club}</div></div>
+          <div class="info-item"><div class="info-key">Nazionalità</div><div class="info-val">${p.nation} ${p.nazione}</div></div>
+          <div class="info-item"><div class="info-key">Valore Stimato</div><div class="info-val" style="color:var(--gold)">${p.value}</div></div>
+          <div class="info-item"><div class="info-key">Disponibilità</div><div class="info-val">${p.available?'✅ Disponibile':'🔒 Contratto attivo'}</div></div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Agente & Contatti</div>
+        <div class="agent-box">
+          <div class="agent-icon">🤝</div>
+          <div><div class="agent-name">${p.agent}</div><div class="agent-contact">📧 ${p.agentEmail}</div></div>
+        </div>
         <div class="contact-actions">
-          <a class="ca-btn green" href="mailto:${p.agentEmail}?subject=Interesse per ${encodeURIComponent(p.name)} - NextPitch">📧 Contatta Agente</a>
-          <button class="ca-btn outline" onclick="toggleWatchlist(${p.id},event)">📌 ${isWatched(p.id) ? 'Rimuovi dalla lista' : 'Aggiungi alla lista'}</button>
-          <button class="ca-btn outline" onclick="toggleCompare(${p.id},event)">⚖️ Confronta</button>
+          <button class="ca-btn green" onclick="showToast('📧 Richiesta inviata all agente di ${p.name}!')">✉️ Contatta Agente</button>
+          <button class="ca-btn outline" onclick="toggleWatchlist(${p.id},event)">${isWatched(p.id)?'📌 In Lista':'🔖 Salva Profilo'}</button>
+          <button class="ca-btn outline" onclick="showToast('🎬 Video highlight in arrivo!')">🎬 Highlight</button>
         </div>
       </div>
     </div>`;
+
   document.getElementById('player-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
-  requestAnimationFrame(() => renderRadarChart('modal-radar', p));
+
+  setTimeout(() => {
+    const ctx = document.getElementById('radar-chart');
+    if (!ctx) return;
+    radarChart = new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels: ['Velocità','Tiro','Dribbling','Passaggio','Fisico','Difesa'],
+        datasets: [{ data: [p.speed,p.tiro,p.dribbling,p.passaggio,p.fisico,p.difesa], backgroundColor: 'rgba(0,201,123,0.15)', borderColor: 'rgba(0,201,123,0.8)', borderWidth: 2, pointBackgroundColor: '#00c97b', pointRadius: 4 }]
+      },
+      options: { responsive:true, plugins:{legend:{display:false}}, scales:{ r:{ min:0, max:100, ticks:{display:false}, grid:{color:'rgba(255,255,255,0.07)'}, angleLines:{color:'rgba(255,255,255,0.07)'}, pointLabels:{color:'#8899aa',font:{size:10,weight:'600'}} } } }
+    });
+  }, 50);
 }
 function closeModal(e) {
   if (e && e.target !== document.getElementById('player-modal')) return;
   document.getElementById('player-modal').classList.remove('open');
   document.body.style.overflow = '';
-  if (radarChart) { radarChart.destroy(); radarChart = null; }
-}
-function closeCompareModal(e) {
-  if (e && e.target !== document.getElementById('compare-modal')) return;
-  document.getElementById('compare-modal').classList.remove('open');
-  document.body.style.overflow = '';
-  if (radarChart) { radarChart.destroy(); radarChart = null; }
-}
-function renderRadarChart(canvasId, p) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  if (radarChart) radarChart.destroy();
-  radarChart = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: ['Velocità','Tiro','Dribbling','Passaggio','Fisico','Difesa'],
-      datasets: [{
-        label: p.name,
-        data: [p.speed, p.tiro, p.dribbling, p.passaggio, p.fisico, p.difesa],
-        backgroundColor: 'rgba(0,201,123,0.18)',
-        borderColor: '#00c97b',
-        pointBackgroundColor: '#00c97b',
-        borderWidth: 2,
-        pointRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: { r: { min: 0, max: 100, ticks: { display: false, stepSize: 20 }, grid: { color: 'rgba(255,255,255,0.07)' }, angleLines: { color: 'rgba(255,255,255,0.1)' }, pointLabels: { color: '#8899aa', font: { size: 11, weight: '600' } } } },
-      plugins: { legend: { display: false } }
-    }
-  });
 }
 
 // ========== COMPARE MODAL ==========
 let compareChart = null;
 function openCompareModal() {
   if (compareList.length < 2) return;
-  const [a, b] = compareList.map(id => players.find(x => x.id === id));
-  const fields = [
-    { key: 'goals', label: 'Gol' }, { key: 'assist', label: 'Assist' }, { key: 'match', label: 'Partite' },
-    { key: 'speed', label: 'Velocità' }, { key: 'tiro', label: 'Tiro' }, { key: 'dribbling', label: 'Dribbling' },
-    { key: 'passaggio', label: 'Passaggio' }, { key: 'fisico', label: 'Fisico' }, { key: 'difesa', label: 'Difesa' },
-    { key: 'valueNum', label: 'Valore (K€)' }
+  const [a, b] = compareList.map(id => players.find(p => p.id === id));
+  if (compareChart) { compareChart.destroy(); compareChart = null; }
+
+  const rows = [
+    ['⚽ Gol', a.goals, b.goals],
+    ['🎯 Assist', a.assist, b.assist],
+    ['📋 Partite', a.match, b.match],
+    ['💰 Valore', a.valueNum, b.valueNum, a.value, b.value],
+    ['⚡ Velocità', a.speed, b.speed],
+    ['🎯 Tiro', a.tiro, b.tiro],
+    ['🕺 Dribbling', a.dribbling, b.dribbling],
+    ['🅿️ Passaggio', a.passaggio, b.passaggio],
+    ['💪 Fisico', a.fisico, b.fisico],
+    ['🛡️ Difesa', a.difesa, b.difesa],
+    ['🎂 Età', a.age, b.age, a.age+' anni', b.age+' anni', true] // lower is better for age? no, same
   ];
-  const rows = fields.map(f => {
-    const aVal = a[f.key], bVal = b[f.key];
-    const aClass = aVal > bVal ? 'val-win' : aVal < bVal ? 'val-lose' : '';
-    const bClass = bVal > aVal ? 'val-win' : bVal < aVal ? 'val-lose' : '';
-    return `<tr><td class="${aClass}">${aVal}</td><td>${f.label}</td><td class="${bClass}">${bVal}</td></tr>`;
-  }).join('');
+
+  function cell(va, vb, la, lb, reverse=false) {
+    const winA = reverse ? va <= vb : va >= vb;
+    const winB = reverse ? vb <= va : vb >= va;
+    const tie = va === vb;
+    return [
+      `<td class="lb-num ${tie?'':winA?'val-win':'val-lose'}">${la||va}</td>`,
+      `<td class="lb-num ${tie?'':winB?'val-win':'val-lose'}">${lb||vb}</td>`
+    ];
+  }
+
   document.getElementById('compare-modal-content').innerHTML = `
+    <button class="modal-close" onclick="closeCompareModal()" style="z-index:2">✕</button>
     <div class="compare-modal-header">
       <h2>⚖️ Confronto Giocatori</h2>
-      <button class="modal-close" style="position:relative;top:auto;right:auto" onclick="closeCompareModal()">✕</button>
     </div>
     <div class="compare-modal-body">
       <div class="compare-header-row">
-        <div class="compare-player-head"><div class="c-avatar">${a.emoji}</div><div class="c-name">${a.name}</div><div class="c-meta">${posLabel(a.pos)} · ${a.age} anni · ${a.club}</div></div>
+        <div class="compare-player-head">
+          <div class="c-avatar">${a.emoji}</div>
+          <div class="c-name">${a.name}</div>
+          <div class="c-meta">${posLabel(a.pos)} · ${a.age} anni</div>
+          <div class="c-meta" style="margin-top:4px;color:var(--gold)">${a.value}</div>
+          <div class="c-meta" style="margin-top:4px">${a.club} ${a.nation}</div>
+        </div>
         <div class="compare-vs">VS</div>
-        <div class="compare-player-head"><div class="c-avatar">${b.emoji}</div><div class="c-name">${b.name}</div><div class="c-meta">${posLabel(b.pos)} · ${b.age} anni · ${b.club}</div></div>
+        <div class="compare-player-head">
+          <div class="c-avatar">${b.emoji}</div>
+          <div class="c-name">${b.name}</div>
+          <div class="c-meta">${posLabel(b.pos)} · ${b.age} anni</div>
+          <div class="c-meta" style="margin-top:4px;color:var(--gold)">${b.value}</div>
+          <div class="c-meta" style="margin-top:4px">${b.club} ${b.nation}</div>
+        </div>
       </div>
       <div class="compare-radar-wrap"><canvas id="compare-radar"></canvas></div>
-      <table class="compare-stats-table">${rows}</table>
+      <table class="compare-stats-table">
+        <thead><tr>
+          <th style="text-align:right;color:var(--green);font-size:0.8rem">${a.name.split(' ')[0]}</th>
+          <th style="text-align:center;font-size:0.7rem;color:var(--muted)">STAT</th>
+          <th style="text-align:left;color:var(--blue);font-size:0.8rem">${b.name.split(' ')[0]}</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => {
+            const [la, lb] = cell(r[1], r[2], r[3], r[4], r[5]);
+            return `<tr>${la}<td style="text-align:center;color:var(--muted);font-size:0.72rem;font-weight:700">${r[0]}</td>${lb}</tr>`;
+          }).join('')}
+        </tbody>
+      </table>
     </div>`;
+
   document.getElementById('compare-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
-  requestAnimationFrame(() => {
+
+  setTimeout(() => {
     const ctx = document.getElementById('compare-radar');
     if (!ctx) return;
-    if (compareChart) compareChart.destroy();
     compareChart = new Chart(ctx, {
       type: 'radar',
       data: {
         labels: ['Velocità','Tiro','Dribbling','Passaggio','Fisico','Difesa'],
         datasets: [
-          { label: a.name, data: [a.speed,a.tiro,a.dribbling,a.passaggio,a.fisico,a.difesa], backgroundColor:'rgba(0,201,123,0.15)', borderColor:'#00c97b', pointBackgroundColor:'#00c97b', borderWidth:2, pointRadius:3 },
-          { label: b.name, data: [b.speed,b.tiro,b.dribbling,b.passaggio,b.fisico,b.difesa], backgroundColor:'rgba(59,130,246,0.15)', borderColor:'#3b82f6', pointBackgroundColor:'#3b82f6', borderWidth:2, pointRadius:3 }
+          { label: a.name.split(' ')[0], data: [a.speed,a.tiro,a.dribbling,a.passaggio,a.fisico,a.difesa], backgroundColor:'rgba(0,201,123,0.12)', borderColor:'rgba(0,201,123,0.85)', borderWidth:2, pointBackgroundColor:'#00c97b', pointRadius:3 },
+          { label: b.name.split(' ')[0], data: [b.speed,b.tiro,b.dribbling,b.passaggio,b.fisico,b.difesa], backgroundColor:'rgba(59,130,246,0.12)', borderColor:'rgba(59,130,246,0.85)', borderWidth:2, pointBackgroundColor:'#3b82f6', pointRadius:3 }
         ]
       },
       options: {
-        responsive: true,
-        scales: { r: { min:0, max:100, ticks:{display:false}, grid:{color:'rgba(255,255,255,0.07)'}, angleLines:{color:'rgba(255,255,255,0.1)'}, pointLabels:{color:'#8899aa',font:{size:11}} } },
-        plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 12 } } } }
+        responsive:true,
+        plugins:{ legend:{ display:true, labels:{ color:'#8899aa', font:{size:11} } } },
+        scales:{ r:{ min:0, max:100, ticks:{display:false}, grid:{color:'rgba(255,255,255,0.07)'}, angleLines:{color:'rgba(255,255,255,0.07)'}, pointLabels:{color:'#8899aa',font:{size:10}} } }
       }
     });
-  });
+  }, 60);
 }
-
-// ========== TOAST ==========
-let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+function closeCompareModal(e) {
+  if (e && e.target !== document.getElementById('compare-modal')) return;
+  document.getElementById('compare-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  if (!e) return;
 }
 
 // ========== NAVIGATION ==========
 function showSection(id, linkEl) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-  const sec = document.getElementById(id);
-  if (sec) sec.classList.add('active');
+  document.getElementById(id).classList.add('active');
   document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
   if (linkEl) linkEl.classList.add('active');
   else {
-    const map = { home:0, players:1, recruiters:2, leaderboard:3, watchlist:4 };
-    const links = document.querySelectorAll('.nav-links a');
-    if (links[map[id]]) links[map[id]].classList.add('active');
+    const map = {home:0,players:1,recruiters:2,leaderboard:3,watchlist:4};
+    const idx = map[id];
+    if (idx !== undefined) document.querySelectorAll('.nav-links a')[idx]?.classList.add('active');
   }
   window.scrollTo(0, 0);
   if (id === 'watchlist') renderWatchlistPage();
   if (id === 'leaderboard') renderLeaderboard();
 }
 
-// ========== RENDER CARDS ==========
-function playerCardHTML(p, featured) {
-  const views = scoutViews(p.id);
-  const watched = isWatched(p.id);
-  const inCompare = compareList.includes(p.id);
-  return `<div class="player-card${inCompare ? ' compare-selected' : ''}" onclick="openModal(${p.id})">
-    <span class="pos-badge">${p.pos}</span>
-    <div class="player-card-header">
-      <div class="player-avatar" style="font-size:2rem">${p.emoji}</div>
-      <div class="player-info">
-        <div class="player-name">${p.name} ${p.nation}</div>
-        <div class="player-pos-age">${posLabel(p.pos)} · ${p.age} anni</div>
-        <div class="player-club-row"><span class="club-badge">${p.club}</span></div>
-      </div>
-    </div>
-    <div class="player-card-body">
-      <div class="scout-views"><span class="scout-dot"></span>${views} scout questa settimana</div>
-      <div class="mini-stats">
-        <div class="mini-stat"><div class="mini-stat-val">${p.goals}</div><div class="mini-stat-key">Gol</div></div>
-        <div class="mini-stat"><div class="mini-stat-val">${p.assist}</div><div class="mini-stat-key">Assist</div></div>
-        <div class="mini-stat"><div class="mini-stat-val">${p.match}</div><div class="mini-stat-key">Partite</div></div>
-      </div>
-      <div class="card-footer">
-        <span class="value-tag">💰 ${p.value}</span>
-        <span class="available-badge ${p.available ? 'yes' : 'no'}">${p.available ? '✅ Libero' : '🔴 Contratto'}</span>
-      </div>
-      <div class="card-actions">
-        <button class="card-btn view" onclick="openModal(${p.id});event.stopPropagation()">Profilo →</button>
-        <button class="card-btn watch${watched ? ' active' : ''}" onclick="toggleWatchlist(${p.id},event)">${watched ? '📌' : '🔖'}</button>
-        <button class="card-btn compare${inCompare ? ' active' : ''}" onclick="toggleCompare(${p.id},event)">⚖️</button>
-      </div>
-    </div>
-  </div>`;
-}
-function renderFeatured() {
-  const grid = document.getElementById('featured-grid');
-  if (!grid) return;
-  grid.innerHTML = players.filter(p => p.featured).map(p => playerCardHTML(p, true)).join('');
-}
-function renderPlayers(list) {
-  const grid = document.getElementById('players-grid');
-  const count = document.getElementById('results-count');
-  if (!grid) return;
-  if (!list.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>Nessun giocatore trovato con questi filtri.</p></div>';
-    if (count) count.innerHTML = '';
-    return;
-  }
-  grid.innerHTML = list.map(p => playerCardHTML(p)).join('');
-  if (count) count.innerHTML = `<span>${list.length}</span> giocatori trovati`;
-}
-function filterPlayers() {
-  const q = (document.getElementById('player-search')?.value || '').toLowerCase();
-  const pos = document.getElementById('pos-filter')?.value || '';
-  const ageRange = document.getElementById('age-filter')?.value || '';
-  const avail = document.getElementById('avail-filter')?.value || '';
-  const filtered = players.filter(p => {
-    if (q && !p.name.toLowerCase().includes(q) && !p.club.toLowerCase().includes(q) && !p.nazione.toLowerCase().includes(q)) return false;
-    if (pos && p.pos !== pos) return false;
-    if (ageRange) {
-      const [mn, mx] = ageRange.split('-').map(Number);
-      if (p.age < mn || p.age > mx) return false;
-    }
-    if (avail === 'yes' && !p.available) return false;
-    if (avail === 'no' && p.available) return false;
-    return true;
-  });
-  renderPlayers(filtered);
-}
-function resetFilters() {
-  const ids = ['player-search','pos-filter','age-filter','avail-filter'];
-  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  renderPlayers(players);
-}
-
-// ========== RECRUITERS ==========
-function recruiterCardHTML(r) {
-  return `<div class="recruiter-card">
-    <div class="recruiter-header">
-      <div class="recruiter-avatar">${r.emoji}</div>
-      <div>
-        <div class="recruiter-name">${r.name}</div>
-        <div class="recruiter-role">${r.role}</div>
-        <div class="recruiter-club">${r.club} · ${r.league}</div>
-      </div>
-      ${r.verified ? '<span class="verified-badge">✅ Verificato</span>' : ''}
-    </div>
-    <div class="recruiter-tags">${r.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
-    <p style="font-size:0.82rem;color:var(--muted);line-height:1.6;margin-bottom:0.75rem">${r.bio}</p>
-    <div class="recruiter-stats">
-      <div class="rec-stat"><div class="rec-stat-val">${r.playersFound}</div><div class="rec-stat-key">Profili visti</div></div>
-      <div class="rec-stat"><div class="rec-stat-val">${r.transfers}</div><div class="rec-stat-key">Trasferimenti</div></div>
-      <div class="rec-stat"><div class="rec-stat-val">${r.active}</div><div class="rec-stat-key">Attivo da</div></div>
-    </div>
-    <a class="contact-btn" href="mailto:${r.email}?subject=Contatto tramite NextPitch">📧 Contatta ${r.name.split(' ')[0]}</a>
-  </div>`;
-}
-function renderRecruiters(list) {
-  const grid = document.getElementById('recruiters-grid');
-  const count = document.getElementById('rec-results-count');
-  if (!grid) return;
-  if (!list.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>Nessun recruiter trovato.</p></div>';
-    return;
-  }
-  grid.innerHTML = list.map(r => recruiterCardHTML(r)).join('');
-  if (count) count.innerHTML = `<span>${list.length}</span> recruiter trovati`;
-}
-function filterRecruiters() {
-  const q = (document.getElementById('rec-search')?.value || '').toLowerCase();
-  const league = document.getElementById('league-filter')?.value || '';
-  const filtered = recruiters.filter(r => {
-    if (q && !r.name.toLowerCase().includes(q) && !r.club.toLowerCase().includes(q) && !r.league.toLowerCase().includes(q)) return false;
-    if (league && r.league !== league) return false;
-    return true;
-  });
-  renderRecruiters(filtered);
-}
-
-// ========== LEADERBOARD ==========
-let lbSortKey = 'goals';
-function renderLeaderboard() {
-  const sorted = [...players].sort((a, b) => {
-    if (lbSortKey === 'age') return a.age - b.age;
-    if (lbSortKey === 'scoutViews') return scoutViews(b.id) - scoutViews(a.id);
-    return b[lbSortKey] - a[lbSortKey];
-  });
-  const rankClass = i => i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-  document.getElementById('lb-body').innerHTML = sorted.map((p, i) => `
-    <tr onclick="openModal(${p.id})">
-      <td class="lb-rank ${rankClass(i)}">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</td>
-      <td><div class="lb-player"><span class="lb-avatar">${p.emoji}</span><div><div class="lb-name">${p.name} ${p.nation}</div><div class="lb-club">${p.club} · <span class="lb-pos">${p.pos}</span></div></div></div></td>
-      <td class="lb-num">${p.goals}</td>
-      <td class="lb-num">${p.assist}</td>
-      <td class="lb-num">${p.match}</td>
-      <td class="lb-num lb-val">${p.value}</td>
-      <td class="lb-num" style="color:var(--orange)">${scoutViews(p.id)}</td>
-      <td><span class="lb-avail ${p.available ? 'yes' : 'no'} available-badge">${p.available ? 'Libero' : 'Contratto'}</span></td>
-    </tr>`).join('');
-}
-function sortLeaderboard(key, btn) {
-  lbSortKey = key;
-  document.querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderLeaderboard();
-}
-
-// ========== WATCHLIST PAGE ==========
-function renderWatchlistPage() {
-  const wl = getWatchlist();
-  const grid = document.getElementById('watchlist-grid');
-  if (!grid) return;
-  if (!wl.length) {
-    grid.innerHTML = `<div class="watchlist-empty" style="grid-column:1/-1">
-      <div class="empty-icon">📌</div>
-      <p>La tua lista è vuota.<br>Aggiungi giocatori dalla sezione Giocatori.</p>
-      <button class="btn-primary" onclick="showSection('players',document.querySelectorAll('.nav-links a')[1])">🔍 Esplora Giocatori</button>
-    </div>`;
-    return;
-  }
-  const list = players.filter(p => wl.includes(p.id));
-  grid.innerHTML = list.map(p => playerCardHTML(p)).join('');
+// ========== TOAST ==========
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
 // ========== INIT ==========
@@ -1030,7 +1053,6 @@ renderFeatured();
 renderPlayers(players);
 renderRecruiters(recruiters);
 renderLeaderboard();
-
 </script>
 </body>
 </html>
