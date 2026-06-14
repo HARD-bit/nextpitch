@@ -309,14 +309,31 @@ footer { background: var(--navy2); border-top: 1px solid var(--border); padding:
 @media (max-width: 768px) {
   .nav-links li:nth-child(4), .nav-links li:nth-child(5) { display: none; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
+  .footer-grid > * { text-align: center; }
+  .footer-brand p { max-width: 100%; }
   .modal-hero { flex-direction: column; text-align: center; }
   .hero h1 { font-size: 2rem; }
   .compare-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; }
 }
+@media (max-width: 600px) {
+  /* Navbar: shrink everything so all items fit on one line */
+  nav { padding: 0 0.6rem; height: 56px; }
+  .logo { font-size: 1.1rem; gap: 6px; }
+  .logo-icon { width: 28px; height: 28px; font-size: 0.95rem; }
+  .nav-links { gap: 0; }
+  .nav-links a { padding: 0.3rem 0.45rem; font-size: 0.75rem; }
+  .nav-cta { padding: 0.35rem 0.65rem; font-size: 0.72rem; }
+}
 @media (max-width: 480px) {
-  nav { padding: 0 1rem; }
+  /* Hide CTA on very small screens — keeps all nav text visible */
+  .nav-cta { display: none; }
   .players-page { padding: 5rem 1rem 2rem; }
+  /* Footer: single column, all centered */
   .footer-grid { grid-template-columns: 1fr; }
+  .footer-grid > * { text-align: center; }
+  .footer-brand p { max-width: 100%; }
+  .footer-col ul { padding: 0; }
+  .footer-bottom { justify-content: center; text-align: center; }
   .modal-body { padding: 1rem 1rem 1.5rem; }
 }
 </style>
